@@ -13,6 +13,8 @@ GEM
     language_server-protocol (3.17.0.3)
     lint_roller (1.1.0)
     minitest (5.25.4)
+    mocha (2.7.1)
+      ruby2_keywords (>= 0.0.5)
     parallel (1.26.3)
     parser (3.3.6.0)
       ast (~> 2.4.1)
@@ -37,6 +39,7 @@ GEM
       rubocop (>= 1.48.1, < 2.0)
       rubocop-ast (>= 1.31.1, < 2.0)
     ruby-progressbar (1.13.0)
+    ruby2_keywords (0.0.5)
     standard (1.43.0)
       language_server-protocol (~> 3.17.0.2)
       lint_roller (~> 1.0)
@@ -59,6 +62,7 @@ PLATFORMS
 DEPENDENCIES
   hawktui!
   minitest (~> 5.16)
+  mocha (~> 2.7)
   rake (~> 13.0)
   standard (~> 1.3)
 
