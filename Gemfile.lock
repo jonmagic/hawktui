@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    hawktui (0.1.0)
+    hawktui (1.0.0)
       curses (~> 1.4.7)
 
 GEM
