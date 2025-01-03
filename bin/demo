@@ -1,0 +1,122 @@
+#!/usr/bin/env ruby
+
+require "bundler/setup"
+require "faker"
+require "hawktui/streaming_table"
+
+# Function to pad the ID with a darker grey color for padding
+def padded_id(id)
+  id_str = id.to_s
+  padding_size = [9 - id_str.length, 0].max
+  ("0" * padding_size) + id_str
+end
+
+# Function to generate a username and email address
+def username_and_email_generator(name)
+  if name.nil?
+    username = Faker::Internet.username
+    email = Faker::Internet.email
+  else
+    separator = ["_", "-", ".", ""].sample
+    username = name.gsub(".", "").split(" ").join(separator)
+    email_domain = ["gmail.com", "outlook.com", "hotmail.com", Faker::Internet.domain_name].sample
+    email = username + "@" + email_domain
+    if rand < 0.5
+      username = username.downcase
+      email = email.downcase
+    end
+  end
+
+  [username, email]
+end
+
+# Function to generate consistent or mismatched data
+def generate_row(id)
+  consistent = rand < 0.8 # 80% chance for consistent data
+  name = Faker::Name.name if consistent
+  username, email = username_and_email_generator(name)
+
+  {
+    "ID" => padded_id(id),
+    "Username" => {
+      value: username,
+      color: 244,
+    },
+    "Email Address" => {
+      value: email,
+      color: 7,
+    },
+    "Full Name" => {
+      value: name || Faker::Name.name,
+      color: 7,
+    },
+    "Age" => {
+      value: Faker::Number.between(from: 18, to: 84).to_s,
+      color: 7,
+    },
+    "Timestamp" => {
+      value: Time.now.strftime("%Y-%m-%d %H:%M:%S"),
+      color: 244,
+    },
+  }
+end
+
+# Initialize the table
+table = Hawktui::StreamingTable.new
+table.setup
+table.layout = Hawktui::StreamingTable::Layout.new(columns: [
+  { name: "ID", width: 9 },
+  { name: "Username", width: 21 },
+  { name: "Email Address", width: 40 },
+  { name: "Full Name", width: Curses.cols - 100 },
+  { name: "Age", width: 3 },
+  { name: "Timestamp", width: 20 }
+])
+
+# Ensure cleanup at exit
+at_exit do
+  table.stop if table
+end
+
+# Handle signals
+Signal.trap("INT") { exit }
+Signal.trap("TERM") { exit }
+
+# Background thread to generate rows
+row_generator = Thread.new do
+  id = 1
+
+  loop do
+    break if table.should_exit
+
+    # Generate a row of data
+    row_data = generate_row(id)
+
+    # Add row to the table
+    table.add_row(row_data)
+
+    # Increment the ID
+    id += 1
+
+    # Respect the `paused` attribute
+    sleep 0.1 while table.paused
+
+    # Pause between new rows
+    sleep 0.4
+  end
+end
+
+# Start the table UI
+table.start
+
+# Main loop to check for exit condition
+loop do
+  if table.should_exit
+    row_generator.exit
+    exit
+  end
+  sleep 0.1
+end
+
+# Wait for the row generator to finish
+row_generator.join
