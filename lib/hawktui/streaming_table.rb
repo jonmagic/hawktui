@@ -40,7 +40,7 @@ module Hawktui
     #   table = Hawktui::StreamingTable.new(columns: [{ name: :time, width: 10 }], max_rows: 500)
     #
     # Returns a new StreamingTable instance.
-    def initialize(columns:, max_rows: 100_000)
+    def initialize(columns: {}, max_rows: 100_000)
       @layout = Layout.new(columns: columns)
       @max_rows = max_rows
       @rows = [] # Store rows newest-first
@@ -52,6 +52,21 @@ module Hawktui
     # Public accessors
     attr_reader :layout, :max_rows, :rows, :paused, :should_exit
     attr_accessor :win
+
+    # Public: Set the layout for the table. This will redraw the table with the new layout.
+    #
+    # new_layout - A Hawktui::StreamingTable::Layout object.
+    #
+    # Examples
+    #
+    #   new_layout = Hawktui::StreamingTable::Layout.new(columns: [{ name: :id, width: 10 }])
+    #   table.layout = new_layout
+    #
+    # Returns nothing.
+    def layout=(new_layout)
+      @layout = new_layout
+      draw if win # Ensure the window is initialized before attempting to draw
+    end
 
     # Public: Start the table UI. Initializes curses, sets up input handling,
     # and draws the initial screen.

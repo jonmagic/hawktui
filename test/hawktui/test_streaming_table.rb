@@ -7,6 +7,7 @@ require "hawktui/streaming_table"
 describe Hawktui::StreamingTable do
   let(:columns) { [{name: :timestamp, width: 20}, {name: :message, width: 50}] }
   let(:max_rows) { 100 }
+  let(:new_columns) { [{name: :id, width: 10}, {name: :message, width: 60}] }
   let(:table) { Hawktui::StreamingTable.new(columns: columns, max_rows: max_rows) }
 
   before do
@@ -36,6 +37,27 @@ describe Hawktui::StreamingTable do
       refute_nil table.win
       refute table.paused
       refute table.should_exit
+    end
+
+    it "uses default columns when none are provided" do
+      default_table = Hawktui::StreamingTable.new
+      assert_equal [], default_table.layout.columns # Assuming the default is an empty array
+      assert_equal 100_000, default_table.max_rows
+      assert_equal [], default_table.rows
+    end
+  end
+
+  describe "layout attribute" do
+    it "allows reading and writing of layout" do
+      new_layout = Hawktui::StreamingTable::Layout.new(columns: new_columns)
+      table.layout = new_layout
+      assert_equal new_columns, table.layout.columns.map { |col| {name: col.name, width: col.width} }
+    end
+
+    it "redraws the table when layout is updated" do
+      new_layout = Hawktui::StreamingTable::Layout.new(columns: new_columns)
+      table.expects(:draw).once
+      table.layout = new_layout
     end
   end
 
