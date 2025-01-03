@@ -17,7 +17,7 @@ module Hawktui
   #     { name: :timestamp, width: 20 },
   #     { name: :message,   width: 50 },
   #   ]
-  #   table = Tui::StreamingTable.new(columns: columns, max_rows: 1000)
+  #   table = Hawktui::StreamingTable.new(columns: columns, max_rows: 1000)
   #   table.start
   #
   #   # In a separate thread or async process:
@@ -31,13 +31,13 @@ module Hawktui
   class StreamingTable
     # Public: Create a new StreamingTable.
     #
-    # columns - An Array of Hashes or Tui::Column objects that define the table’s
+    # columns - An Array of Hashes or Hawktui::StreamingTable::Column objects that define the table’s
     #           columns. Each element should at least contain `:name` and `:width`.
     # max_rows - The maximum number of rows to keep in the table. Defaults to 100000.
     #
     # Examples
     #
-    #   table = Tui::StreamingTable.new(columns: [{ name: :time, width: 10 }], max_rows: 500)
+    #   table = Hawktui::StreamingTable.new(columns: [{ name: :time, width: 10 }], max_rows: 500)
     #
     # Returns a new StreamingTable instance.
     def initialize(columns:, max_rows: 100_000)

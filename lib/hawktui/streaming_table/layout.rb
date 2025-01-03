@@ -12,7 +12,7 @@ module Hawktui
     #     { name: :timestamp, width: 20 },
     #     { name: :message,   width: 50 },
     #   ]
-    #   layout = Tui::TableLayout.new(columns: columns, header_color: :white)
+    #   layout = Hawktui::StreamingTable::Layout.new(columns: columns, header_color: :white)
     #
     #   header_cells = layout.build_header_row   # => [Cell(...), Cell(...)]
     #
@@ -21,13 +21,13 @@ module Hawktui
 
       # Public: Create a new TableLayout.
       #
-      # columns      - An Array of Hashes or Tui::Column objects. Each element must
+      # columns      - An Array of Hashes or Hawktui::StreamingTable::Column objects. Each element must
       #                have a `:name` and `:width`.
       # header_color - A Symbol representing the color used in the header (defaults to :white).
       #
       # Examples
       #
-      #   layout = Tui::TableLayout.new(
+      #   layout = Hawktui::StreamingTable::Layout.new(
       #     columns: [
       #       { name: :time, width: 10 },
       #       { name: :level, width: 5 },
@@ -52,7 +52,7 @@ module Hawktui
       #   layout.build_header_row
       #   # => [Cell(value="time", color=:white), Cell(value="level", color=:white)]
       #
-      # Returns an Array of Tui::Cell objects.
+      # Returns an Array of Hawktui::StreamingTable::Cell objects.
       def build_header_row
         columns.map do |col|
           # Use the stored @header_color for all headers
@@ -71,7 +71,7 @@ module Hawktui
       #   layout.build_cells_for_row(row_hash)
       #   # => [Cell(value="12:00", color=nil), Cell(value="INFO", color=:green)]
       #
-      # Returns an Array of Tui::Cell objects.
+      # Returns an Array of Hawktui::StreamingTable::Cell objects.
       def build_cells_for_row(row_hash)
         columns.map do |col|
           value_or_hash = row_hash[col.name] || ""

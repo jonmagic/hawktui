@@ -8,7 +8,7 @@ Gem::Specification.new do |spec|
   spec.authors = ["Jonathan Hoyt"]
   spec.email = ["jonmagic@gmail.com"]
 
-  spec.summary = "HawkTui is a simple and easy to use TUI (Terminal User Interface) library for Ruby."
+  spec.summary = "Hawktui is a simple and easy to use TUI (Terminal User Interface) library for Ruby."
   spec.description = "Use this gem to build TUIs in Ruby."
   spec.homepage = "https://github.com/jonmagic/hawktui"
   spec.required_ruby_version = ">= 3.0.0"

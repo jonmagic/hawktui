@@ -7,11 +7,11 @@ module Hawktui
     #
     # Examples
     #
-    #   cell = Tui::Cell.new("Hello")
+    #   cell = Hawktui::StreamingTable::Cell.new("Hello")
     #   cell.value  # => "Hello"
     #   cell.color  # => nil
     #
-    #   colored_cell = Tui::Cell.new(value: "Error", color: :red)
+    #   colored_cell = Hawktui::StreamingTable::Cell.new(value: "Error", color: :red)
     #   colored_cell.value  # => "Error"
     #   colored_cell.color  # => :red
     #

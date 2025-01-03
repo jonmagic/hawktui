@@ -7,7 +7,7 @@ module Hawktui
     #
     # Examples
     #
-    #   column = Tui::Column.new(name: :message, width: 50)
+    #   column = Hawktui::StreamingTable::Column.new(name: :message, width: 50)
     #
     class Column
       attr_reader :name, :width
@@ -19,7 +19,7 @@ module Hawktui
       #
       # Examples
       #
-      #   column = Tui::Column.new(name: :message, width: 50)
+      #   column = Hawktui::StreamingTable::Column.new(name: :message, width: 50)
       #
       # Returns a new Column instance.
       def initialize(name:, width:)
@@ -31,11 +31,11 @@ module Hawktui
       # If the text is longer than `width`, it will be truncated with an ellipsis ("…").
       # Otherwise, it’s left-padded with spaces to fill the width.
       #
-      # cell - A Tui::Cell containing the raw value and color.
+      # cell - A Hawktui::StreamingTable::Cell containing the raw value and color.
       #
       # Examples
       #
-      #   cell = Tui::Cell.new("Some message")
+      #   cell = Hawktui::StreamingTable::Cell.new("Some message")
       #   column.format_cell(cell)
       #   # => ["Some message        ", nil] # => example if width is bigger
       #
