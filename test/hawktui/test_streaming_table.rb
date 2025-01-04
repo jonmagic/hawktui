@@ -214,6 +214,31 @@ describe Hawktui::StreamingTable do
     end
   end
 
+  describe "selected row functionality" do
+    it "toggles row selection with the spacebar" do
+      table.add_row({timestamp: "2025-01-01 12:00", message: "Row 1"})
+      table.add_row({timestamp: "2025-01-01 12:01", message: "Row 2"})
+
+      table.current_row_index = 0
+      table.toggle_selection
+      assert_includes table.selected_row_indices, 0
+
+      table.toggle_selection
+      refute_includes table.selected_row_indices, 0
+    end
+
+    it "highlights selected rows during rendering" do
+      table.add_row({timestamp: "2025-01-01 12:00", message: "Row 1"})
+      table.add_row({timestamp: "2025-01-01 12:01", message: "Row 2"})
+
+      table.current_row_index = 0
+      table.toggle_selection
+
+      @mock_window.expects(:attron).with(Curses::A_BOLD | Curses::A_REVERSE).yields
+      table.draw_body
+    end
+  end
+
   describe "#handle_input" do
     it 'toggles pause when "p" is pressed' do
       Curses.stubs(:getch).returns("p")

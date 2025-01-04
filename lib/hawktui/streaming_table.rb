@@ -49,10 +49,11 @@ module Hawktui
       @should_exit = false
       @current_row_index = 0
       @offset = 0
+      @selected_row_indices = Set.new
     end
 
     # Public accessors
-    attr_reader :layout, :max_rows, :rows, :paused, :should_exit
+    attr_reader :layout, :max_rows, :rows, :paused, :selected_row_indices, :should_exit
     attr_accessor :current_row_index, :offset, :win
 
     # Public: Set the layout for the table. This will redraw the table with the new layout.
@@ -151,8 +152,11 @@ module Hawktui
       end
     end
 
-    # Internal: Handle a single character of user input, toggling pause or stopping
-    # the table as appropriate.
+    # Internal: Handle user input from the terminal.
+    # - 'p' to pause/unpause the table
+    # - 'q' to quit the process
+    # - Up/Down arrow keys to navigate the table
+    # - Space to toggle selection of the current row
     #
     # Returns nothing.
     def handle_input
@@ -166,6 +170,8 @@ module Hawktui
         navigate_up
       when Curses::KEY_DOWN
         navigate_down
+      when " "  # Press space to toggle selection of the current row
+        toggle_selection
       end
     end
 
@@ -200,6 +206,18 @@ module Hawktui
       elsif current_row_index >= offset + Curses.lines
         self.offset = current_row_index - Curses.lines + 1
       end
+    end
+
+    # Internal: Toggle whether the current row is selected.
+    #
+    # Returns nothing.
+    def toggle_selection
+      if selected_row_indices.include?(current_row_index)
+        selected_row_indices.delete(current_row_index)
+      else
+        selected_row_indices.add(current_row_index)
+      end
+      draw
     end
 
     # Internal: Toggle whether the table is paused. When paused, new rows
@@ -251,8 +269,22 @@ module Hawktui
           column.format_cell(cell)
         end
 
-        if row_index == current_row_index
-          @win.attron(Curses::A_REVERSE) { draw_row(idx + 1, formatted_cells) }
+        # Decide highlight style:
+        style = if row_index == current_row_index && selected_row_indices.include?(row_index)
+          # Both selected + current
+          Curses::A_BOLD | Curses::A_REVERSE
+        elsif row_index == current_row_index
+          # Current row only
+          Curses::A_REVERSE
+        elsif selected_row_indices.include?(row_index)
+          # Selected only
+          Curses::A_BOLD
+        else
+          nil
+        end
+
+        if style
+          @win.attron(style) { draw_row(idx + 1, formatted_cells) }
         else
           draw_row(idx + 1, formatted_cells)
         end
@@ -267,8 +299,9 @@ module Hawktui
 
       win.setpos(Curses.lines - 1, 0)
       status = paused ? "PAUSED" : "RUNNING"
-      help_text = " | Press 'p' to pause/unpause, 'q' to quit"
-      win.addstr("Status: #{status}#{help_text}".ljust(Curses.cols))
+      selection_info = " | #{@selected_row_indices.size} rows selected"
+      help_text = " | Press 'p' to pause/unpause, space to select, 'q' to quit"
+      win.addstr("Status: #{status}#{selection_info}#{help_text}".ljust(Curses.cols))
       win.refresh
     end
 
