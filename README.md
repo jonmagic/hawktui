@@ -63,6 +63,12 @@ I use LLMs a lot so I've added a couple of scripts that make it easier to write 
     bin/code_for_prompt | bin/token_count
     ```
 
+## Contributing
+
+Pull Requests are welcome. If you find a bug or have a feature request I encourage you to follow the instructions above and then try out an LLM tool like GitHub Copilot, ChatGPT, or Claude to help you fix the bug or write the feature. Version 1 of this library was written entirely using LLMs, from feature ideas to bug fixes.
+
+Prompt driven development (aka [PBD](https://www.deeplearning.ai/the-batch/ai-at-the-speed-of-prompting/) or [PDP](https://www.ai4science.ai/post/prompt-driven-programming-a-new-software-development-paradigm)) is the future :rocket:
+
 ## Contributors
 
 - [@jonmagic](https://github.com/jonmagic)
