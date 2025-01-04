@@ -4,11 +4,13 @@ require "bundler/setup"
 require "faker"
 require "hawktui/streaming_table"
 
-# Function to pad the ID with a darker grey color for padding
-def padded_id(id)
-  id_str = id.to_s
-  padding_size = [9 - id_str.length, 0].max
-  ("0" * padding_size) + id_str
+def padded_string(str, len, padding: "0", string_color: 7, padding_color: 7)
+  str = str.to_s
+  padding_size = [len - str.length, 0].max
+  [
+    { value: (padding.to_s * padding_size), color: padding_color },
+    { value: str, color: string_color },
+  ]
 end
 
 # Function to generate a username and email address
@@ -37,7 +39,7 @@ def generate_row(id)
   username, email = username_and_email_generator(name)
 
   {
-    "ID" => padded_id(id),
+    "ID" => padded_string(id, 9, padding: "0", string_color: 244, padding_color: 239),
     "Username" => {
       value: username,
       color: 244,
