@@ -193,7 +193,7 @@ module Hawktui
       formatted_header_cells = header_cells.zip(layout.columns).map do |cell, column|
         column.format_cell(cell)
       end
-      draw_row(0, formatted_header_cells)
+      win.attron(Curses::A_BOLD) { draw_row(0, formatted_header_cells) }
     end
 
     # Internal: Draw the body of the table (rows of data).
