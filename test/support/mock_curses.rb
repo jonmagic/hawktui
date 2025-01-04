@@ -71,4 +71,8 @@ module MockCurses
   A_BOLD = 1
   A_NORMAL = 0
   A_REVERSE = 2
+
+  # Key Constants
+  KEY_UP = "KEY_UP"
+  KEY_DOWN = "KEY_DOWN"
 end

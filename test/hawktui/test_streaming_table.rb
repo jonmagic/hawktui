@@ -147,6 +147,73 @@ describe Hawktui::StreamingTable do
     end
   end
 
+  describe "current row functionality" do
+    it "initializes current_row_index to 0" do
+      assert_equal 0, table.current_row_index
+    end
+
+    it "moves current_row_index up with navigate_up" do
+      table.add_row({timestamp: "2025-01-01 12:00", message: "Row 1"})
+      table.add_row({timestamp: "2025-01-01 12:01", message: "Row 2"})
+
+      table.current_row_index = 1
+      table.navigate_up
+
+      assert_equal 0, table.current_row_index
+    end
+
+    it "moves current_row_index down with navigate_down" do
+      table.add_row({timestamp: "2025-01-01 12:00", message: "Row 1"})
+      table.add_row({timestamp: "2025-01-01 12:01", message: "Row 2"})
+
+      table.navigate_down
+
+      assert_equal 1, table.current_row_index
+    end
+
+    it "does not move above the first row" do
+      table.add_row({timestamp: "2025-01-01 12:00", message: "Row 1"})
+
+      table.current_row_index = 0
+      table.navigate_up
+
+      assert_equal 0, table.current_row_index
+    end
+
+    it "does not move below the last row" do
+      table.add_row({timestamp: "2025-01-01 12:00", message: "Row 1"})
+      table.add_row({timestamp: "2025-01-01 12:01", message: "Row 2"})
+
+      table.current_row_index = 1
+      table.navigate_down
+
+      assert_equal 1, table.current_row_index
+    end
+
+    it "highlights the current row during rendering" do
+      table.add_row({timestamp: "2025-01-01 12:00", message: "Row 1"})
+      table.add_row({timestamp: "2025-01-01 12:01", message: "Row 2"})
+
+      sequence = sequence("drawing")
+      @mock_window.expects(:attron).with(Curses::A_REVERSE).in_sequence(sequence).yields
+      @mock_window.expects(:setpos).with(1, 0).in_sequence(sequence)
+      @mock_window.expects(:addstr).with("Row 1                                             ").in_sequence(sequence)
+
+      table.current_row_index = 0
+      table.draw_body
+    end
+
+    it "scrolls when current_row_index moves off-screen" do
+      Curses.stubs(:lines).returns(10) # Mock 10 lines for terminal height
+      15.times { |i| table.add_row({timestamp: "2025-01-01 12:#{i.to_s.rjust(2, "0")}", message: "Row #{i}"}) }
+
+      table.current_row_index = 12
+      table.adjust_offset
+
+      assert_equal 3, table.offset
+    end
+  end
+
   describe "#handle_input" do
     it 'toggles pause when "p" is pressed' do
       Curses.stubs(:getch).returns("p")
@@ -157,6 +224,18 @@ describe Hawktui::StreamingTable do
     it 'exits when "q" is pressed' do
       Curses.stubs(:getch).returns("q")
       table.expects(:stop).once
+      table.handle_input
+    end
+
+    it 'navigates up with "KEY_UP"' do
+      Curses.stubs(:getch).returns(Curses::KEY_UP)
+      table.expects(:navigate_up).once
+      table.handle_input
+    end
+
+    it 'navigates down with "KEY_DOWN"' do
+      Curses.stubs(:getch).returns(Curses::KEY_DOWN)
+      table.expects(:navigate_down).once
       table.handle_input
     end
   end

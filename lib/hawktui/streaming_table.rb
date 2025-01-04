@@ -47,11 +47,13 @@ module Hawktui
       @paused = false
       @input_thread = nil
       @should_exit = false
+      @current_row_index = 0
+      @offset = 0
     end
 
     # Public accessors
     attr_reader :layout, :max_rows, :rows, :paused, :should_exit
-    attr_accessor :win
+    attr_accessor :current_row_index, :offset, :win
 
     # Public: Set the layout for the table. This will redraw the table with the new layout.
     #
@@ -160,6 +162,43 @@ module Hawktui
       when "q"
         @should_exit = true
         stop
+      when Curses::KEY_UP
+        navigate_up
+      when Curses::KEY_DOWN
+        navigate_down
+      end
+    end
+
+    # Internal: Navigate up one row in the table.
+    #
+    # Returns nothing.
+    def navigate_up
+      return if current_row_index <= 0
+
+      self.current_row_index -= 1
+      adjust_offset
+      draw
+    end
+
+    # Internal: Navigate down one row in the table.
+    #
+    # Returns nothing.
+    def navigate_down
+      return if current_row_index >= rows.size - 1
+
+      self.current_row_index += 1
+      adjust_offset
+      draw
+    end
+
+    # Internal: Adjust the offset to keep the current row in view.
+    #
+    # Returns nothing.
+    def adjust_offset
+      if current_row_index < offset
+        self.offset = current_row_index
+      elsif current_row_index >= offset + Curses.lines
+        self.offset = current_row_index - Curses.lines + 1
       end
     end
 
@@ -196,19 +235,27 @@ module Hawktui
       win.attron(Curses::A_BOLD) { draw_row(0, formatted_header_cells) }
     end
 
-    # Internal: Draw the body of the table (rows of data).
+    # Internal: Draw the body of the table, including all rows.
+    # - Highlights the current row if it is in view.
+    # - Handles scrolling if the current row is not in view.
     #
     # Returns nothing.
     def draw_body
       max_display_rows = Curses.lines - 2
-      display_rows = rows.first(max_display_rows)
+      display_rows = rows[offset, max_display_rows] || []
 
       display_rows.each_with_index do |row_data, idx|
-        cells = layout.build_cells_for_row(row_data)
-        formatted_cells = cells.zip(layout.columns).map do |cell, column|
+        row_index = offset + idx
+        cells = @layout.build_cells_for_row(row_data)
+        formatted_cells = cells.zip(@layout.columns).map do |cell, column|
           column.format_cell(cell)
         end
-        draw_row(idx + 1, formatted_cells)
+
+        if row_index == current_row_index
+          @win.attron(Curses::A_REVERSE) { draw_row(idx + 1, formatted_cells) }
+        else
+          draw_row(idx + 1, formatted_cells)
+        end
       end
     end
 
