@@ -31,8 +31,8 @@ module Hawktui
   class StreamingTable
     # Public: Create a new StreamingTable.
     #
-    # columns - An Array of Hashes or Hawktui::StreamingTable::Column objects that define the table’s
-    #           columns. Each element should at least contain `:name` and `:width`.
+    # columns  - An Array of Hashes or Hawktui::StreamingTable::Column objects that define the table’s
+    #            columns. Each element should at least contain `:name` and `:width`.
     # max_rows - The maximum number of rows to keep in the table. Defaults to 100000.
     #
     # Examples
@@ -227,23 +227,53 @@ module Hawktui
 
     # Internal: Draw a single row of the table, given already-formatted cells.
     #
-    # y_pos            - The Integer row position (0-based) on the screen to draw.
-    # formatted_cells  - An Array of [string_value, color], as returned by column formatting.
+    # y_pos           - The Integer row position (0-based) on the screen to draw.
+    # formatted_cells - An Array of either:
+    #                   - [string_value, color] pairs for simple cells
+    #                   - Array of [string_value, color] pairs for composite cells
     #
     # Returns nothing.
     def draw_row(y_pos, formatted_cells)
       x_pos = 0
-      formatted_cells.each do |str_value, color|
+      formatted_cells.each do |cell_data|
         win.setpos(y_pos, x_pos)
 
-        if y_pos == 0
-          # Bold the header row
-          win.attron(Curses::A_BOLD) { draw_with_color(str_value, color) }
+        if cell_data.is_a?(Array) && cell_data[0].is_a?(Array)
+          # Handle composite cell (array of [value, color] pairs)
+          cell_data.each do |str_value, color|
+            draw_cell_part(str_value, color)
+            x_pos += str_value.to_s.length
+          end
         else
-          draw_with_color(str_value, color)
+          # Handle simple cell (single [value, color] pair)
+          str_value, color = cell_data
+          draw_cell_part(str_value, color)
+          x_pos += str_value.to_s.length
         end
 
-        x_pos += str_value.length + 1
+        # Add space between columns
+        x_pos += 1
+      end
+    end
+
+    # Internal: Draw a single part of a cell with the specified color.
+    #
+    # str_value - The String text to draw.
+    # color     - An Integer color pair index or Symbol referencing a base color.
+    #
+    # Returns nothing.
+    def draw_cell_part(str_value, color)
+      return unless str_value
+
+      if color
+        color_pair = color.is_a?(Integer) ? color : Utils::Colors::BASE_COLORS[color.to_sym]&.first
+        if color_pair
+          win.attron(Curses.color_pair(color_pair + 1)) { win.addstr(str_value.to_s) }
+        else
+          win.addstr(str_value.to_s)
+        end
+      else
+        win.addstr(str_value.to_s)
       end
     end
 

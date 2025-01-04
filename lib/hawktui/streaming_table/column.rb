@@ -27,25 +27,45 @@ module Hawktui
         @width = width
       end
 
-      # Public: Format the cell’s textual value to fit within the column width.
-      # If the text is longer than `width`, it will be truncated with an ellipsis ("…").
-      # Otherwise, it’s left-padded with spaces to fill the width.
-      #
-      # cell - A Hawktui::StreamingTable::Cell containing the raw value and color.
+      # Public: Format a cell value to fit within the column's width.
       #
       # Examples
       #
-      #   cell = Hawktui::StreamingTable::Cell.new("Some message")
+      #   column = Hawktui::StreamingTable::Column.new(name: :message, width: 10)
+      #   cell = Hawktui::StreamingTable::Cell.new("A long message")
       #   column.format_cell(cell)
-      #   # => ["Some message        ", nil] # => example if width is bigger
+      #   # => ["A long me…", nil]
       #
-      # Returns an Array [formatted_string, color].
+      # cell - A Cell object containing the value and optional color to format.
+      #
+      # Returns an Array of [formatted_value, color] tuples:
+      #   - For simple cells: returns a single tuple [String, Symbol/Integer]
+      #   - For composite cells: returns an Array of such tuples
       def format_cell(cell)
-        str_value = cell.value.to_s
-        if str_value.size > width
-          [str_value[0...width - 1] + "…", cell.color]
+        if cell.composite?
+          # For composite cells, each component maintains its own color
+          cell.components.map do |component|
+            # Don't pad individual components of a composite cell
+            [component.value.to_s, component.color]
+          end
         else
-          [str_value.ljust(width), cell.color]
+          # For single cells, pad the entire value
+          formatted_value = format_value(cell.value)
+          [formatted_value, cell.color]
+        end
+      end
+
+      # Internal: Format a single value to fit within the column width.
+      #
+      # value - The value to format (converted to String).
+      #
+      # Returns a String padded or truncated to fit the column width.
+      def format_value(value)
+        str_value = value.to_s
+        if str_value.length >= width
+          str_value[0...width]
+        else
+          str_value.ljust(width)
         end
       end
     end

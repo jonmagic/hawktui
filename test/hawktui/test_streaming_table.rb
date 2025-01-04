@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "curses"
 require "hawktui/streaming_table"
+require_relative "../support/mock_curses"
+
+# Replace Curses with our mock version for all tests
+Object.send(:remove_const, :Curses) if Object.const_defined?(:Curses)
+Curses = MockCurses
 
 describe Hawktui::StreamingTable do
   let(:columns) { [{name: :timestamp, width: 20}, {name: :message, width: 50}] }
@@ -11,22 +15,13 @@ describe Hawktui::StreamingTable do
   let(:table) { Hawktui::StreamingTable.new(columns: columns, max_rows: max_rows) }
 
   before do
-    Curses.stubs(:init_screen)
-    Curses.stubs(:start_color)
-    Curses.stubs(:noecho)
-    Curses.stubs(:curs_set)
-    Curses.stdscr.stubs(:keypad)
-    Curses.stubs(:lines).returns(24)
-    Curses.stubs(:cols).returns(80)
-    Curses.stubs(:close_screen)
-
-    mock_window = mock("Curses::Window")
-    mock_window.stubs(:clear)
-    mock_window.stubs(:setpos)
-    mock_window.stubs(:addstr)
-    mock_window.stubs(:attron).yields
-    mock_window.stubs(:refresh)
-    table.win = mock_window
+    @mock_window = mock("MockCurses::Window")
+    @mock_window.stubs(:clear)
+    @mock_window.stubs(:setpos)
+    @mock_window.stubs(:addstr)
+    @mock_window.stubs(:attron).yields
+    @mock_window.stubs(:refresh)
+    table.win = @mock_window
   end
 
   describe "#initialize" do
@@ -72,6 +67,52 @@ describe Hawktui::StreamingTable do
       (max_rows + 1).times { |i| table.add_row({timestamp: i.to_s, message: "Test"}) }
       assert_equal max_rows, table.rows.size
       assert_equal "1", table.rows.last[:timestamp]
+    end
+
+    it "handles composite cells with multiple colors" do
+      row = {
+        timestamp: Time.now.to_s,
+        id: [
+          {value: "000", color: :dark_grey},
+          {value: "42", color: :light_grey}
+        ]
+      }
+      table.add_row(row)
+      assert_equal [row], table.rows
+    end
+
+    it "handles composite cells with multiple colors" do
+      row = {
+        timestamp: Time.now.to_s,
+        id: [
+          {value: "000", color: :dark_grey},
+          {value: "42", color: :light_grey}
+        ]
+      }
+      table.add_row(row)
+      assert_equal [row], table.rows
+    end
+  end
+
+  describe "#draw_row" do
+    it "draws composite cells with multiple colors" do
+      sequence = sequence("drawing")
+
+      @mock_window.expects(:setpos).with(1, 0).in_sequence(sequence)
+      @mock_window.expects(:addstr).with("000").in_sequence(sequence)
+      @mock_window.expects(:addstr).with("42").in_sequence(sequence)
+      @mock_window.expects(:setpos).with(1, 6).in_sequence(sequence)
+      @mock_window.expects(:addstr).with("Message").in_sequence(sequence)
+
+      formatted_cells = [
+        [
+          ["000", 1],
+          ["42", 2]
+        ],
+        ["Message", nil]
+      ]
+
+      table.draw_row(1, formatted_cells)
     end
   end
 
