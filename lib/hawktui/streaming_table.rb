@@ -53,8 +53,8 @@ module Hawktui
     end
 
     # Public accessors
-    attr_reader :layout, :max_rows, :rows, :paused, :selected_row_indices, :should_exit
-    attr_accessor :current_row_index, :offset, :win
+    attr_reader :layout, :max_rows, :rows, :selected_row_indices, :should_exit
+    attr_accessor :current_row_index, :offset, :paused, :win
 
     # Public: Set the layout for the table. This will redraw the table with the new layout.
     #
@@ -169,6 +169,7 @@ module Hawktui
       when Curses::KEY_UP
         navigate_up
       when Curses::KEY_DOWN
+        toggle_pause unless paused
         navigate_down
       when " "  # Press space to toggle selection of the current row
         toggle_selection
@@ -220,13 +221,24 @@ module Hawktui
       draw
     end
 
-    # Internal: Toggle whether the table is paused. When paused, new rows
-    # are still collected but not rendered until unpaused.
+    # Internal: Toggle whether the table is paused.
+    # - When paused, the table stops updating and the current row is fixed.
+    # - When unpaused, the table resumes updating and the current row and
+    #   selections are reset.
     #
     # Returns nothing.
     def toggle_pause
-      @paused = !paused
+      self.paused = !paused
+
+      unless paused
+        # Reset selections and current row on resume
+        selected_row_indices.clear
+        self.current_row_index = 0
+        self.offset = 0
+      end
+
       draw_footer
+      draw unless paused
     end
 
     # Internal: Draw the entire table (header, rows, status line).

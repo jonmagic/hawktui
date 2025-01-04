@@ -138,7 +138,7 @@ describe Hawktui::StreamingTable do
 
   describe "#toggle_pause" do
     it "toggles the pause state and redraws footer" do
-      table.expects(:draw_footer).twice
+      table.expects(:draw_footer).times(3)
       refute table.paused
       table.toggle_pause
       assert table.paused
@@ -236,6 +236,93 @@ describe Hawktui::StreamingTable do
 
       @mock_window.expects(:attron).with(Curses::A_BOLD | Curses::A_REVERSE).yields
       table.draw_body
+    end
+  end
+
+  describe "auto-pause on navigation" do
+    it "does not auto-pause when navigating up" do
+      Curses.stubs(:getch).returns(Curses::KEY_UP)
+      refute table.paused
+      table.handle_input
+      refute table.paused
+    end
+
+    it "auto-pauses when navigating down" do
+      Curses.stubs(:getch).returns(Curses::KEY_DOWN)
+      refute table.paused
+      table.handle_input
+      assert table.paused
+    end
+
+    it "doesn't pause again if already paused when navigating up" do
+      table.toggle_pause # Start paused
+      assert table.paused
+
+      Curses.stubs(:getch).returns(Curses::KEY_UP)
+      table.expects(:toggle_pause).never
+      table.handle_input
+      assert table.paused
+    end
+
+    it "doesn't pause again if already paused when navigating down" do
+      table.toggle_pause # Start paused
+      assert table.paused
+
+      Curses.stubs(:getch).returns(Curses::KEY_DOWN)
+      table.expects(:toggle_pause).never
+      table.handle_input
+      assert table.paused
+    end
+  end
+
+  describe "reset on resume" do
+    before do
+      # Add some rows and make some selections
+      3.times { |i| table.add_row({timestamp: "2025-01-01 12:0#{i}", message: "Row #{i}"}) }
+      table.current_row_index = 1
+      table.toggle_selection # Select row 1
+      table.offset = 1
+    end
+
+    it "clears selections when unpausing" do
+      table.toggle_pause # Pause
+      assert_equal 1, table.selected_row_indices.size
+
+      table.toggle_pause # Unpause
+      assert_equal 0, table.selected_row_indices.size
+    end
+
+    it "resets current row to 0 when unpausing" do
+      table.toggle_pause # Pause
+      assert_equal 1, table.current_row_index
+
+      table.toggle_pause # Unpause
+      assert_equal 0, table.current_row_index
+    end
+
+    it "resets offset to 0 when unpausing" do
+      table.toggle_pause # Pause
+      assert_equal 1, table.offset
+
+      table.toggle_pause # Unpause
+      assert_equal 0, table.offset
+    end
+
+    it "redraws the table when unpausing" do
+      table.toggle_pause # Pause
+      table.expects(:draw).once
+      table.toggle_pause # Unpause
+    end
+
+    it "maintains the pause state and selections while paused" do
+      table.toggle_pause # Pause
+      original_selections = table.selected_row_indices.dup
+      original_current_row = table.current_row_index
+
+      table.add_row({timestamp: "2025-01-01 12:03", message: "New Row"})
+
+      assert_equal original_selections, table.selected_row_indices
+      assert_equal original_current_row, table.current_row_index
     end
   end
 
