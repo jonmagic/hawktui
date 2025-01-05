@@ -385,4 +385,46 @@ describe Hawktui::StreamingTable do
       table.input_handler.handle_input(Curses::KEY_DOWN)
     end
   end
+
+  describe "page navication" do
+    it "navigates down by a page" do
+      Curses.stubs(:lines).returns(10) # Mock 10 lines for terminal height
+      15.times { |i| table.add_row({timestamp: "2025-01-01 12:#{i.to_s.rjust(2, "0")}", message: "Row #{i}"}) }
+
+      table.current_row_index = 0
+      table.navigate_page_down
+
+      assert_equal 8, table.current_row_index
+    end
+
+    it "does not navigate past the last row" do
+      Curses.stubs(:lines).returns(10) # Mock 10 lines for terminal height
+      15.times { |i| table.add_row({timestamp: "2025-01-01 12:#{i.to_s.rjust(2, "0")}", message: "Row #{i}"}) }
+
+      table.current_row_index = 10
+      table.navigate_page_down
+
+      assert_equal 14, table.current_row_index
+    end
+
+    it "navigates up by a page" do
+      Curses.stubs(:lines).returns(10) # Mock 10 lines for terminal height
+      15.times { |i| table.add_row({timestamp: "2025-01-01 12:#{i.to_s.rjust(2, "0")}", message: "Row #{i}"}) }
+
+      table.current_row_index = 14
+      table.navigate_page_up
+
+      assert_equal 6, table.current_row_index
+    end
+
+    it "does not navigate past the first row" do
+      Curses.stubs(:lines).returns(10) # Mock 10 lines for terminal height
+      15.times { |i| table.add_row({timestamp: "2025-01-01 12:#{i.to_s.rjust(2, "0")}", message: "Row #{i}"}) }
+
+      table.current_row_index = 4
+      table.navigate_page_up
+
+      assert_equal 0, table.current_row_index
+    end
+  end
 end

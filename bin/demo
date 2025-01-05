@@ -142,6 +142,13 @@ keybindings = {
       ui.navigate_up
     end
   },
+  # Move down a page
+  Curses::KEY_NPAGE => ->(ui) {
+    ui.toggle_pause unless ui.paused
+    ui.navigate_page_down
+  },
+  # Move up a page
+  Curses::KEY_PPAGE => ->(ui) {ui.navigate_page_up },
   # Clear all selections
   "r" => ->(ui) {
     ui.clear_selections

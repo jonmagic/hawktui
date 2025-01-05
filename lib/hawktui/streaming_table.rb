@@ -162,6 +162,26 @@ module Hawktui
       draw
     end
 
+    # Public: Scroll down one page in the table.
+    #
+    # Returns nothing.
+    def navigate_page_down
+      max_display_rows = Curses.lines - 2
+      self.current_row_index = [current_row_index + max_display_rows, rows.size - 1].min
+      adjust_offset
+      draw
+    end
+
+    # Public: Scroll up one page in the table.
+    #
+    # Returns nothing.
+    def navigate_page_up
+      max_display_rows = Curses.lines - 2
+      self.current_row_index = [current_row_index - max_display_rows, 0].max
+      adjust_offset
+      draw
+    end
+
     # Public: Toggle whether the current row is selected.
     #
     # Returns nothing.
