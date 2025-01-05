@@ -100,14 +100,16 @@ row_generator = Thread.new do
   loop do
     break if table.should_exit
 
-    # Generate a row of data
-    row_data = generate_row(id)
+    unless table.paused
+      # Generate a row of data
+      row_data = generate_row(id)
 
-    # Add row to the table
-    table.add_row(row_data)
+      # Add row to the table
+      table.add_row(row_data)
 
-    # Increment the ID
-    id += 1
+      # Increment the ID
+      id += 1
+    end
 
     # Respect the `paused` attribute
     sleep 0.1 while table.paused
