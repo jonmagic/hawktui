@@ -63,17 +63,93 @@ def generate_row(id)
   }
 end
 
+# Initial state
+initial_state = {
+  multi_select: false, # Whether multi-select mode is active
+  multi_select_direction: nil, # :up or :down (the most recent direction of multi-select scrolling)
+  multi_select_start_index: nil, # The row index where multi-select began
+}
+
 # Keybindings for the UI
 keybindings = {
-  " " => ->(ui) { ui.toggle_selection },
-  "KEY_DOWN" => ->(ui) { ui.toggle_pause unless ui.paused; ui.navigate_down },
-  Curses::KEY_UP => ->(ui) { ui.navigate_up },
+  # Toggle selection on the current row (single-row toggle)
+  " " => ->(ui) {
+    ui.toggle_selection
+  },
+  # Toggle multi-select mode
+  "m" => ->(ui) {
+    ui.state[:multi_select] = !ui.state[:multi_select]
+
+    if ui.state[:multi_select]
+      # We're enabling multi-select:
+      # 1) Mark the start index
+      ui.state[:multi_select_start_index] = ui.current_row_index
+      # 2) Reset the direction so next move sets it
+      ui.state[:multi_select_direction] = nil
+      # 3) Select the current row right away
+      ui.toggle_selection
+    else
+      # We're disabling multi-select:
+      # 1) Clear the start index
+      ui.state[:multi_select_start_index] = nil
+      # 2) Reset direction
+      ui.state[:multi_select_direction] = nil
+    end
+  },
+  # Move DOWN
+  "KEY_DOWN" => ->(ui) {
+    ui.toggle_pause unless ui.paused
+
+    if ui.state[:multi_select]
+      # If the last direction was 'up' but now we're going 'down', unselect current row (unless it's the start index)
+      if ui.state[:multi_select_direction] == :up && ui.current_row_index != ui.state[:multi_select_start_index]
+        ui.toggle_selection  # toggles OFF the current row
+      end
+
+      # Move down
+      ui.navigate_down
+
+      # Now toggle ON the new current row (unless it’s the start index you already have selected)
+      if ui.current_row_index != ui.state[:multi_select_start_index]
+        ui.toggle_selection
+      end
+
+      # Update direction
+      ui.state[:multi_select_direction] = :down
+    else
+      ui.navigate_down
+    end
+  },
+  # Move UP
+  Curses::KEY_UP => ->(ui) {
+    if ui.state[:multi_select]
+      # If the last direction was 'down' but now we're going 'up', unselect current row (unless it's the start index)
+      if ui.state[:multi_select_direction] == :down && ui.current_row_index != ui.state[:multi_select_start_index]
+        ui.toggle_selection  # toggles OFF the current row
+      end
+
+      # Move up
+      ui.navigate_up
+
+      # Now toggle ON the new current row (unless it’s the start index you already have selected)
+      if ui.current_row_index != ui.state[:multi_select_start_index]
+        ui.toggle_selection
+      end
+
+      # Update direction
+      ui.state[:multi_select_direction] = :up
+    else
+      ui.navigate_up
+    end
+  },
+  # Pause/unpause
   "p" => ->(ui) { ui.toggle_pause },
+  # Quit
   "q" => ->(ui) { ui.stop },
 }
 
 # Initialize the table
-table = Hawktui::StreamingTable.new(keybindings: keybindings)
+table = Hawktui::StreamingTable.new(keybindings: keybindings, state: initial_state)
 table.setup
 table.layout = Hawktui::StreamingTable::Layout.new(columns: [
   { name: "ID", width: 9 },

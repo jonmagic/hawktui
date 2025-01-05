@@ -38,7 +38,7 @@ describe Hawktui::StreamingTable do
   end
 
   describe "#initialize" do
-    it "initializes with columns, max_rows, and actions" do
+    it "initializes with columns, max_rows, keybindings, and state" do
       assert_equal columns, table.layout.columns.map { |col| {name: col.name, width: col.width} }
       assert_equal max_rows, table.max_rows
       assert_equal [], table.rows
@@ -49,6 +49,7 @@ describe Hawktui::StreamingTable do
           key
         end
       }, table.keybindings
+      assert_equal({}, table.state)
       refute_nil table.win
       refute table.paused
       refute table.should_exit

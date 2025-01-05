@@ -52,7 +52,7 @@ module Hawktui
     #           )
     #
     # Returns a new StreamingTable instance.
-    def initialize(columns: {}, max_rows: 100_000, keybindings: {})
+    def initialize(columns: {}, max_rows: 100_000, keybindings: {}, state: {})
       @layout = Layout.new(columns: columns)
       @max_rows = max_rows
       @rows = [] # Store rows newest-first
@@ -62,6 +62,7 @@ module Hawktui
       @current_row_index = 0
       @offset = 0
       @selected_row_indices = Set.new
+      @state = state || {}
       @keybindings = keybindings.transform_keys { |key|
         begin
           Curses.const_get(key)
@@ -72,7 +73,7 @@ module Hawktui
     end
 
     # Public accessors
-    attr_reader :keybindings, :layout, :max_rows, :rows, :selected_row_indices, :should_exit
+    attr_reader :keybindings, :layout, :max_rows, :rows, :selected_row_indices, :should_exit, :state
     attr_accessor :current_row_index, :input_handler, :offset, :paused, :win
 
     # Public: Set the layout for the table. This will redraw the table with the new layout.
