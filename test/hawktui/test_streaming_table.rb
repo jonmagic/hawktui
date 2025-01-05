@@ -115,6 +115,19 @@ describe Hawktui::StreamingTable do
     end
   end
 
+  describe "#clear_selections" do
+    it "clears all selected rows" do
+      3.times { |i| table.add_row({timestamp: "2025-01-01 12:0#{i}", message: "Row #{i}"}) }
+      table.navigate_down
+      table.toggle_selection # Select row 1
+      table.navigate_down
+      table.toggle_selection # Select row 2
+      assert_equal 2, table.selected_row_indices.size
+      table.clear_selections
+      assert_equal 0, table.selected_row_indices.size
+    end
+  end
+
   describe "#draw_row" do
     it "draws composite cells with multiple colors" do
       sequence = sequence("drawing")

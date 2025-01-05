@@ -174,6 +174,14 @@ module Hawktui
       draw
     end
 
+    # Public: Clear all selected rows.
+    #
+    # Returns nothing.
+    def clear_selections
+      selected_row_indices.clear
+      draw
+    end
+
     # Public: Toggle whether the table is paused.
     # - When paused, the table stops updating and the current row is fixed.
     # - When unpaused, the table resumes updating and the current row and

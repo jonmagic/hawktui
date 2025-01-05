@@ -142,6 +142,10 @@ keybindings = {
       ui.navigate_up
     end
   },
+  # Clear all selections
+  "r" => ->(ui) {
+    ui.clear_selections
+  },
   # Pause/unpause
   "p" => ->(ui) { ui.toggle_pause },
   # Quit
