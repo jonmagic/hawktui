@@ -230,7 +230,7 @@ describe Hawktui::StreamingTable do
       table.current_row_index = 12
       table.adjust_offset
 
-      assert_equal 3, table.offset
+      assert_equal 5, table.offset
     end
   end
 

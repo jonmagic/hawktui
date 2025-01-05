@@ -236,10 +236,11 @@ module Hawktui
     #
     # Returns nothing.
     def adjust_offset
+      max_display_rows = Curses.lines - 2
       if current_row_index < offset
         self.offset = current_row_index
-      elsif current_row_index >= offset + Curses.lines
-        self.offset = current_row_index - Curses.lines + 1
+      elsif current_row_index >= offset + max_display_rows
+        self.offset = current_row_index - max_display_rows + 1
       end
     end
 
