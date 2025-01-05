@@ -139,6 +139,60 @@ module Hawktui
       draw unless paused
     end
 
+    # Public: Navigate up one row in the table.
+    #
+    # Returns nothing.
+    def navigate_up
+      return if current_row_index <= 0
+
+      self.current_row_index -= 1
+      adjust_offset
+      draw
+    end
+
+    # Public: Navigate down one row in the table.
+    #
+    # Returns nothing.
+    def navigate_down
+      return if current_row_index >= rows.size - 1
+
+      self.current_row_index += 1
+      adjust_offset
+      draw
+    end
+
+    # Public: Toggle whether the current row is selected.
+    #
+    # Returns nothing.
+    def toggle_selection
+      if selected_row_indices.include?(current_row_index)
+        selected_row_indices.delete(current_row_index)
+      else
+        selected_row_indices.add(current_row_index)
+      end
+      draw
+    end
+
+    # Public: Toggle whether the table is paused.
+    # - When paused, the table stops updating and the current row is fixed.
+    # - When unpaused, the table resumes updating and the current row and
+    #   selections are reset.
+    #
+    # Returns nothing.
+    def toggle_pause
+      self.paused = !paused
+
+      unless paused
+        # Reset selections and current row on resume
+        selected_row_indices.clear
+        self.current_row_index = 0
+        self.offset = 0
+      end
+
+      draw_footer
+      draw unless paused
+    end
+
     # Internal: Set up curses, initialize colors, etc. Called by #start.
     #
     # Returns nothing.
@@ -178,28 +232,6 @@ module Hawktui
       end
     end
 
-    # Internal: Navigate up one row in the table.
-    #
-    # Returns nothing.
-    def navigate_up
-      return if current_row_index <= 0
-
-      self.current_row_index -= 1
-      adjust_offset
-      draw
-    end
-
-    # Internal: Navigate down one row in the table.
-    #
-    # Returns nothing.
-    def navigate_down
-      return if current_row_index >= rows.size - 1
-
-      self.current_row_index += 1
-      adjust_offset
-      draw
-    end
-
     # Internal: Adjust the offset to keep the current row in view.
     #
     # Returns nothing.
@@ -209,38 +241,6 @@ module Hawktui
       elsif current_row_index >= offset + Curses.lines
         self.offset = current_row_index - Curses.lines + 1
       end
-    end
-
-    # Internal: Toggle whether the current row is selected.
-    #
-    # Returns nothing.
-    def toggle_selection
-      if selected_row_indices.include?(current_row_index)
-        selected_row_indices.delete(current_row_index)
-      else
-        selected_row_indices.add(current_row_index)
-      end
-      draw
-    end
-
-    # Internal: Toggle whether the table is paused.
-    # - When paused, the table stops updating and the current row is fixed.
-    # - When unpaused, the table resumes updating and the current row and
-    #   selections are reset.
-    #
-    # Returns nothing.
-    def toggle_pause
-      self.paused = !paused
-
-      unless paused
-        # Reset selections and current row on resume
-        selected_row_indices.clear
-        self.current_row_index = 0
-        self.offset = 0
-      end
-
-      draw_footer
-      draw unless paused
     end
 
     # Internal: Draw the entire table (header, rows, status line).
