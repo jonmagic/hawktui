@@ -52,7 +52,7 @@ module Hawktui
     #           )
     #
     # Returns a new StreamingTable instance.
-    def initialize(columns: {}, max_rows: 100_000, keybindings: {}, state: {})
+    def initialize(columns: {}, max_rows: 100_000, keybindings: {}, state: {}, status: nil)
       @layout = Layout.new(columns: columns)
       @max_rows = max_rows
       @rows = [] # Store rows newest-first
@@ -70,11 +70,16 @@ module Hawktui
           key
         end
       }
+      @status = status
+      @status_queue = Queue.new
+      @status_lock = Mutex.new
+      @status_thread = nil
+      @current_status_message = nil
     end
 
     # Public accessors
-    attr_reader :keybindings, :layout, :max_rows, :rows, :selected_row_indices, :should_exit, :state
-    attr_accessor :current_row_index, :input_handler, :offset, :paused, :win
+    attr_reader :keybindings, :layout, :max_rows, :rows, :selected_row_indices, :should_exit, :state, :status
+    attr_accessor :current_row_index, :current_status_message, :input_handler, :offset, :paused, :win
 
     # Public: Set the layout for the table. This will redraw the table with the new layout.
     #
@@ -342,11 +347,68 @@ module Hawktui
       return unless win
 
       win.setpos(Curses.lines - 1, 0)
-      status = paused ? "PAUSED" : "RUNNING"
-      selection_info = " | #{@selected_row_indices.size} rows selected"
-      help_text = " | Press 'p' to pause/unpause, space to select, 'q' to quit"
-      win.addstr("Status: #{status}#{selection_info}#{help_text}".ljust(Curses.cols))
+      message = current_status_message || status&.call(self) || default_status_text
+      win.addstr(message.ljust(Curses.cols)) # Pad to clear the line
       win.refresh
+    end
+
+    # Internal: Default status line text.
+    #
+    # Returns a String.
+    def default_status_text
+      help_text = "Press 'p' to pause/unpause, space to select, 'q' to quit"
+      selection_info = "#{selected_row_indices.size} rows selected"
+      status = paused ? "PAUSED" : "RUNNING"
+      "Status: #{status} | #{selection_info} | #{help_text}"
+    end
+
+    # Internal: Set the status message.
+    #
+    # message  - The String message to display.
+    def set_status_message(message, duration: 5)
+      @status_lock.synchronize do
+        @status_queue << {message: message, duration: duration}
+      end
+      process_status_queue
+    end
+
+    # Internal: Process the status message queue.
+    #
+    # Returns nothing.
+    def process_status_queue
+      return if @status_thread&.alive? # Prevent multiple threads from running.
+
+      @status_thread = Thread.new do
+        while (entry = @status_lock.synchronize {
+          begin
+            @status_queue.pop(true)
+          rescue
+            nil
+          end
+        })
+          @status_lock.synchronize do
+            self.current_status_message = entry[:message]
+            draw_footer
+          end
+
+          sleep(entry[:duration]) # Wait for the message duration.
+
+          @status_lock.synchronize do
+            self.current_status_message = nil
+            draw_footer
+          end
+        end
+      end
+    end
+
+    # Internal: Clear the status message.
+    #
+    # Returns nothing.
+    def clear_status_message
+      @status_lock.synchronize do
+        self.current_status_message = nil
+        draw_footer
+      end
     end
 
     # Internal: Draw a single row of the table, given already-formatted cells.

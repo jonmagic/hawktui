@@ -181,6 +181,49 @@ describe Hawktui::StreamingTable do
     end
   end
 
+  describe "#set_status_message" do
+    it "displays a custom status message for the specified duration" do
+      @mock_window.expects(:setpos).with(Curses.lines - 1, 0).twice
+      @mock_window.expects(:addstr).with("Temporary status message".ljust(Curses.cols)).once
+      @mock_window.expects(:addstr).with(table.default_status_text.ljust(Curses.cols)).once
+      @mock_window.expects(:refresh).twice
+
+      table.set_status_message("Temporary status message", duration: 0.1)
+
+      sleep(0.2) # Allow time for the message to clear
+      assert_nil table.current_status_message
+    end
+
+    it "queues multiple status messages and displays them in order" do
+      @mock_window.expects(:setpos).with(Curses.lines - 1, 0).times(3)
+      @mock_window.expects(:addstr).with("First message".ljust(Curses.cols)).once
+      @mock_window.expects(:addstr).with("Second message".ljust(Curses.cols)).once
+      @mock_window.expects(:addstr).with(table.default_status_text.ljust(Curses.cols)).once
+      @mock_window.expects(:refresh).times(3)
+
+      table.set_status_message("First message", duration: 0.1)
+      table.set_status_message("Second message", duration: 0.1)
+
+      sleep(0.3) # Allow time for both messages to clear
+      assert_nil table.current_status_message
+    end
+  end
+
+  describe "#clear_status_message" do
+    it "clears the current status message and reverts to the default status" do
+      @mock_window.expects(:setpos).with(Curses.lines - 1, 0).twice
+      @mock_window.expects(:addstr).with("Temporary status message".ljust(Curses.cols)).once
+      @mock_window.expects(:addstr).with(table.default_status_text.ljust(Curses.cols)).once
+      @mock_window.expects(:refresh).twice
+
+      table.set_status_message("Temporary status message", duration: 0.1)
+      sleep(0.2) # Let the temporary message display
+      table.clear_status_message
+
+      assert_nil table.current_status_message
+    end
+  end
+
   describe "current row functionality" do
     it "initializes current_row_index to 0" do
       assert_equal 0, table.current_row_index
@@ -386,7 +429,7 @@ describe Hawktui::StreamingTable do
     end
   end
 
-  describe "page navication" do
+  describe "page navigation" do
     it "navigates down by a page" do
       Curses.stubs(:lines).returns(10) # Mock 10 lines for terminal height
       15.times { |i| table.add_row({timestamp: "2025-01-01 12:#{i.to_s.rjust(2, "0")}", message: "Row #{i}"}) }

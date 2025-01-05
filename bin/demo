@@ -151,7 +151,11 @@ keybindings = {
   Curses::KEY_PPAGE => ->(ui) {ui.navigate_page_up },
   # Clear all selections
   "r" => ->(ui) {
+    ui.set_status_message("Cleared #{ui.selected_row_indices.size} selections", duration: 5)
     ui.clear_selections
+    ui.state[:multi_select] = false
+    ui.state[:multi_select_start_index] = nil
+    ui.state[:multi_select_direction] = nil
   },
   # Pause/unpause
   "p" => ->(ui) { ui.toggle_pause },
@@ -159,8 +163,15 @@ keybindings = {
   "q" => ->(ui) { ui.stop },
 }
 
+default_status = ->(ui) {
+  help_text = "Press 'p' to pause/unpause, space to select, 'q' to quit"
+  selection_info = "#{ui.selected_row_indices.size} rows selected"
+  status = ui.paused ? "PAUSED" : "RUNNING"
+  "DEMO | Status: #{status} | #{selection_info} | #{help_text}"
+}
+
 # Initialize the table
-table = Hawktui::StreamingTable.new(keybindings: keybindings, state: initial_state)
+table = Hawktui::StreamingTable.new(keybindings: keybindings, state: initial_state, status: default_status)
 table.setup
 table.layout = Hawktui::StreamingTable::Layout.new(columns: [
   { name: "ID", width: 9 },
