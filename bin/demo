@@ -63,8 +63,17 @@ def generate_row(id)
   }
 end
 
+# Keybindings for the UI
+keybindings = {
+  " " => ->(ui) { ui.toggle_selection },
+  "KEY_DOWN" => ->(ui) { ui.toggle_pause unless ui.paused; ui.navigate_down },
+  Curses::KEY_UP => ->(ui) { ui.navigate_up },
+  "p" => ->(ui) { ui.toggle_pause },
+  "q" => ->(ui) { ui.stop },
+}
+
 # Initialize the table
-table = Hawktui::StreamingTable.new
+table = Hawktui::StreamingTable.new(keybindings: keybindings)
 table.setup
 table.layout = Hawktui::StreamingTable::Layout.new(columns: [
   { name: "ID", width: 9 },

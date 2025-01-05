@@ -12,7 +12,19 @@ describe Hawktui::StreamingTable do
   let(:columns) { [{name: :timestamp, width: 20}, {name: :message, width: 50}] }
   let(:max_rows) { 100 }
   let(:new_columns) { [{name: :id, width: 10}, {name: :message, width: 60}] }
-  let(:table) { Hawktui::StreamingTable.new(columns: columns, max_rows: max_rows) }
+  let(:keybindings) {
+    {
+      " " => ->(ui) { ui.toggle_selection },
+      "KEY_DOWN" => ->(ui) {
+        ui.toggle_pause unless ui.paused
+        ui.navigate_down
+      },
+      Curses::KEY_UP => ->(ui) { ui.navigate_up },
+      "p" => ->(ui) { ui.toggle_pause },
+      "q" => ->(ui) { ui.stop }
+    }
+  }
+  let(:table) { Hawktui::StreamingTable.new(columns: columns, max_rows: max_rows, keybindings: keybindings) }
 
   before do
     @mock_window = mock("MockCurses::Window")
@@ -22,13 +34,21 @@ describe Hawktui::StreamingTable do
     @mock_window.stubs(:attron).yields
     @mock_window.stubs(:refresh)
     table.win = @mock_window
+    table.input_handler = Hawktui::Utils::InputHandler.new(keybindings: table.keybindings, ui: table)
   end
 
   describe "#initialize" do
-    it "initializes with columns and max_rows" do
+    it "initializes with columns, max_rows, and actions" do
       assert_equal columns, table.layout.columns.map { |col| {name: col.name, width: col.width} }
       assert_equal max_rows, table.max_rows
       assert_equal [], table.rows
+      assert_equal keybindings.transform_keys { |key|
+        begin
+          Curses.const_get(key)
+        rescue
+          key
+        end
+      }, table.keybindings
       refute_nil table.win
       refute table.paused
       refute table.should_exit
@@ -243,14 +263,14 @@ describe Hawktui::StreamingTable do
     it "does not auto-pause when navigating up" do
       Curses.stubs(:getch).returns(Curses::KEY_UP)
       refute table.paused
-      table.handle_input
+      table.input_handler.handle_input(Curses::KEY_UP)
       refute table.paused
     end
 
     it "auto-pauses when navigating down" do
-      Curses.stubs(:getch).returns(Curses::KEY_DOWN)
+      Curses.stubs(:getch).returns
       refute table.paused
-      table.handle_input
+      table.input_handler.handle_input(Curses::KEY_DOWN)
       assert table.paused
     end
 
@@ -260,7 +280,7 @@ describe Hawktui::StreamingTable do
 
       Curses.stubs(:getch).returns(Curses::KEY_UP)
       table.expects(:toggle_pause).never
-      table.handle_input
+      table.input_handler.handle_input(Curses::KEY_UP)
       assert table.paused
     end
 
@@ -270,7 +290,7 @@ describe Hawktui::StreamingTable do
 
       Curses.stubs(:getch).returns(Curses::KEY_DOWN)
       table.expects(:toggle_pause).never
-      table.handle_input
+      table.input_handler.handle_input(Curses::KEY_DOWN)
       assert table.paused
     end
   end
@@ -330,25 +350,25 @@ describe Hawktui::StreamingTable do
     it 'toggles pause when "p" is pressed' do
       Curses.stubs(:getch).returns("p")
       table.expects(:toggle_pause).once
-      table.handle_input
+      table.input_handler.handle_input("p")
     end
 
     it 'exits when "q" is pressed' do
       Curses.stubs(:getch).returns("q")
       table.expects(:stop).once
-      table.handle_input
+      table.input_handler.handle_input("q")
     end
 
     it 'navigates up with "KEY_UP"' do
       Curses.stubs(:getch).returns(Curses::KEY_UP)
       table.expects(:navigate_up).once
-      table.handle_input
+      table.input_handler.handle_input(Curses::KEY_UP)
     end
 
     it 'navigates down with "KEY_DOWN"' do
       Curses.stubs(:getch).returns(Curses::KEY_DOWN)
       table.expects(:navigate_down).once
-      table.handle_input
+      table.input_handler.handle_input(Curses::KEY_DOWN)
     end
   end
 end

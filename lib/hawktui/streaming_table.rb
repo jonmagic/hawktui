@@ -2,6 +2,7 @@
 
 require "curses"
 require "hawktui/utils/colors"
+require "hawktui/utils/input_handler"
 require "hawktui/streaming_table/cell"
 require "hawktui/streaming_table/column"
 require "hawktui/streaming_table/layout"
@@ -31,16 +32,27 @@ module Hawktui
   class StreamingTable
     # Public: Create a new StreamingTable.
     #
-    # columns  - An Array of Hashes or Hawktui::StreamingTable::Column objects that define the table’s
-    #            columns. Each element should at least contain `:name` and `:width`.
-    # max_rows - The maximum number of rows to keep in the table. Defaults to 100000.
+    # columns     - An Array of Hashes or Hawktui::StreamingTable::Column objects that define the table’s
+    #               columns. Each element should at least contain `:name` and `:width`.
+    # max_rows    - The maximum number of rows to keep in the table. Defaults to 100000.
+    # keybindings - A Hash mapping keys to actions (Procs).
     #
     # Examples
     #
-    #   table = Hawktui::StreamingTable.new(columns: [{ name: :time, width: 10 }], max_rows: 500)
+    #   table = Hawktui::StreamingTable.new(
+    #             columns: [{ name: :time, width: 10 }],
+    #             max_rows: 500,
+    #             keybindings: {
+    #               " " => ->(ui) { ui.toggle_selection },
+    #               "KEY_DOWN" => ->(ui) { ui.toggle_pause unless ui.paused; ui.navigate_down },
+    #               Curses::KEY_UP => ->(ui) { ui.navigate_up },
+    #               "p" => ->(ui) { ui.toggle_pause },
+    #               "q" => ->(ui) { ui.stop },
+    #             }
+    #           )
     #
     # Returns a new StreamingTable instance.
-    def initialize(columns: {}, max_rows: 100_000)
+    def initialize(columns: {}, max_rows: 100_000, keybindings: {})
       @layout = Layout.new(columns: columns)
       @max_rows = max_rows
       @rows = [] # Store rows newest-first
@@ -50,11 +62,18 @@ module Hawktui
       @current_row_index = 0
       @offset = 0
       @selected_row_indices = Set.new
+      @keybindings = keybindings.transform_keys { |key|
+        begin
+          Curses.const_get(key)
+        rescue
+          key
+        end
+      }
     end
 
     # Public accessors
-    attr_reader :layout, :max_rows, :rows, :selected_row_indices, :should_exit
-    attr_accessor :current_row_index, :offset, :paused, :win
+    attr_reader :keybindings, :layout, :max_rows, :rows, :selected_row_indices, :should_exit
+    attr_accessor :current_row_index, :input_handler, :offset, :paused, :win
 
     # Public: Set the layout for the table. This will redraw the table with the new layout.
     #
@@ -94,6 +113,7 @@ module Hawktui
     #
     # Returns nothing. Exits the process.
     def stop
+      @should_exit = true
       @input_thread&.exit
       Curses.close_screen if win
       self.win = nil
@@ -136,12 +156,18 @@ module Hawktui
     end
 
     # Internal: Start a separate thread to handle user input (non-blocking).
+    # The input thread will call the InputHandler to execute actions based on
+    # key presses defined in the keybindings.
     #
     # Returns nothing.
     def start_input_handling
       @input_thread = Thread.new do
+        # The InputHandler must be initialized in the input thread to avoid
+        # threading issues with Curses and then assigned to the UI instance.
+        self.input_handler = Utils::InputHandler.new(keybindings: keybindings, ui: self)
+
         loop do
-          handle_input
+          @input_handler.handle_input(Curses.getch)
           sleep 0.1
           break if should_exit
         end
@@ -149,30 +175,6 @@ module Hawktui
         win.setpos(0, 0)
         win.addstr("Error in input thread: #{e.message}")
         win.refresh
-      end
-    end
-
-    # Internal: Handle user input from the terminal.
-    # - 'p' to pause/unpause the table
-    # - 'q' to quit the process
-    # - Up/Down arrow keys to navigate the table
-    # - Space to toggle selection of the current row
-    #
-    # Returns nothing.
-    def handle_input
-      case Curses.getch
-      when "p"
-        toggle_pause
-      when "q"
-        @should_exit = true
-        stop
-      when Curses::KEY_UP
-        navigate_up
-      when Curses::KEY_DOWN
-        toggle_pause unless paused
-        navigate_down
-      when " "  # Press space to toggle selection of the current row
-        toggle_selection
       end
     end
 
