@@ -1,0 +1,94 @@
+#!/usr/bin/env ruby
+
+class TokenEstimator
+  DEFAULT_MODEL = "gpt-4o"
+
+  TOKEN_RATIOS = {
+    DEFAULT_MODEL => 4,
+    "claude" => 3.5
+  }.freeze
+
+  CODE_INDICATORS = [
+    "```", "def ", "class ", "function", "import ",
+    "{", "}", ";", "//", "/*", "*/", "#include"
+  ].freeze
+
+  def estimate_tokens(text, model: DEFAULT_MODEL)
+    normalized_text = text.strip.gsub(/\s+/, ' ')
+    char_count = normalized_text.length
+    word_count = normalized_text.split.length
+    ratio = TOKEN_RATIOS[model] || TOKEN_RATIOS[DEFAULT_MODEL]
+    estimated_tokens = (char_count / ratio).round
+    estimated_tokens = (estimated_tokens * 1.1).round if contains_code?(normalized_text)
+
+    {
+      estimated_tokens: estimated_tokens,
+      char_count: char_count,
+      word_count: word_count,
+      chars_per_token: (char_count.to_f / estimated_tokens).round(2),
+      model: model
+    }
+  end
+
+  private
+
+  def contains_code?(text)
+    CODE_INDICATORS.any? { |indicator| text.include?(indicator) }
+  end
+end
+
+def get_input_from_command(command)
+  `#{command}`.strip
+end
+
+def get_input_from_pipe
+  return nil unless STDIN.tty? == false
+  STDIN.read.strip
+end
+
+def print_usage
+  puts "Usage:"
+  puts "  1. Pipe input:    cat files/* | #{$PROGRAM_NAME} [--model=MODEL]"
+  puts "  2. Use command:   #{$PROGRAM_NAME} [--model=MODEL] 'command to run'"
+  puts "\nModels: gpt-4o (default), claude"
+  exit 1
+end
+
+def parse_args
+  model = TokenEstimator::DEFAULT_MODEL
+  command = nil
+
+  ARGV.each do |arg|
+    if arg.start_with?("--model=")
+      model = arg.split("=")[1]
+    elsif !arg.start_with?("--")
+      command = arg
+    end
+  end
+
+  [model, command]
+end
+
+def main
+  model, command = parse_args
+
+  # Get input either from pipe or command
+  input = get_input_from_pipe || (command && get_input_from_command(command))
+
+  if input.nil? || input.empty?
+    print_usage
+  end
+
+  result = TokenEstimator.new.estimate_tokens(input, model: model)
+
+  # Print results in a clean format
+  puts "\nToken Estimation Results:"
+  puts "------------------------"
+  puts "Model: #{result[:model]}"
+  puts "Estimated tokens: #{result[:estimated_tokens]}"
+  puts "Character count: #{result[:char_count]}"
+  puts "Word count: #{result[:word_count]}"
+  puts "Chars per token: #{result[:chars_per_token]}"
+end
+
+main if __FILE__ == $PROGRAM_NAME

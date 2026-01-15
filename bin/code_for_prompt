@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+project_path=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+find $project_path/lib $project_path/test \
+  -name "*.rb" \
+  -type f \
+  -exec sh -c 'echo "### File: {}" && cat "{}" && echo' \;

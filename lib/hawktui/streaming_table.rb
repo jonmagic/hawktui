@@ -2,6 +2,7 @@
 
 require "curses"
 require "hawktui/utils/colors"
+require "hawktui/utils/input_handler"
 require "hawktui/streaming_table/cell"
 require "hawktui/streaming_table/column"
 require "hawktui/streaming_table/layout"
@@ -31,27 +32,54 @@ module Hawktui
   class StreamingTable
     # Public: Create a new StreamingTable.
     #
-    # columns - An Array of Hashes or Hawktui::StreamingTable::Column objects that define the table’s
-    #           columns. Each element should at least contain `:name` and `:width`.
-    # max_rows - The maximum number of rows to keep in the table. Defaults to 100000.
+    # columns     - An Array of Hashes or Hawktui::StreamingTable::Column objects that define the table’s
+    #               columns. Each element should at least contain `:name` and `:width`.
+    # max_rows    - The maximum number of rows to keep in the table. Defaults to 100000.
+    # keybindings - A Hash mapping keys to actions (Procs).
     #
     # Examples
     #
-    #   table = Hawktui::StreamingTable.new(columns: [{ name: :time, width: 10 }], max_rows: 500)
+    #   table = Hawktui::StreamingTable.new(
+    #             columns: [{ name: :time, width: 10 }],
+    #             max_rows: 500,
+    #             keybindings: {
+    #               " " => ->(ui) { ui.toggle_selection },
+    #               "KEY_DOWN" => ->(ui) { ui.toggle_pause unless ui.paused; ui.navigate_down },
+    #               Curses::KEY_UP => ->(ui) { ui.navigate_up },
+    #               "p" => ->(ui) { ui.toggle_pause },
+    #               "q" => ->(ui) { ui.stop },
+    #             }
+    #           )
     #
     # Returns a new StreamingTable instance.
-    def initialize(columns: {}, max_rows: 100_000)
+    def initialize(columns: {}, max_rows: 100_000, keybindings: {}, state: {}, status: nil)
       @layout = Layout.new(columns: columns)
       @max_rows = max_rows
       @rows = [] # Store rows newest-first
       @paused = false
       @input_thread = nil
       @should_exit = false
+      @current_row_index = 0
+      @offset = 0
+      @selected_row_indices = Set.new
+      @state = state || {}
+      @keybindings = keybindings.transform_keys { |key|
+        begin
+          Curses.const_get(key)
+        rescue
+          key
+        end
+      }
+      @status = status
+      @status_queue = Queue.new
+      @status_lock = Mutex.new
+      @status_thread = nil
+      @current_status_message = nil
     end
 
     # Public accessors
-    attr_reader :layout, :max_rows, :rows, :paused, :should_exit
-    attr_accessor :win
+    attr_reader :keybindings, :layout, :max_rows, :rows, :selected_row_indices, :should_exit, :state, :status
+    attr_accessor :current_row_index, :current_status_message, :input_handler, :offset, :paused, :win
 
     # Public: Set the layout for the table. This will redraw the table with the new layout.
     #
@@ -91,6 +119,7 @@ module Hawktui
     #
     # Returns nothing. Exits the process.
     def stop
+      @should_exit = true
       @input_thread&.exit
       Curses.close_screen if win
       self.win = nil
@@ -116,6 +145,88 @@ module Hawktui
       draw unless paused
     end
 
+    # Public: Navigate up one row in the table.
+    #
+    # Returns nothing.
+    def navigate_up
+      return if current_row_index <= 0
+
+      self.current_row_index -= 1
+      adjust_offset
+      draw
+    end
+
+    # Public: Navigate down one row in the table.
+    #
+    # Returns nothing.
+    def navigate_down
+      return if current_row_index >= rows.size - 1
+
+      self.current_row_index += 1
+      adjust_offset
+      draw
+    end
+
+    # Public: Scroll down one page in the table.
+    #
+    # Returns nothing.
+    def navigate_page_down
+      max_display_rows = Curses.lines - 2
+      self.current_row_index = [current_row_index + max_display_rows, rows.size - 1].min
+      adjust_offset
+      draw
+    end
+
+    # Public: Scroll up one page in the table.
+    #
+    # Returns nothing.
+    def navigate_page_up
+      max_display_rows = Curses.lines - 2
+      self.current_row_index = [current_row_index - max_display_rows, 0].max
+      adjust_offset
+      draw
+    end
+
+    # Public: Toggle whether the current row is selected.
+    #
+    # Returns nothing.
+    def toggle_selection
+      if selected_row_indices.include?(current_row_index)
+        selected_row_indices.delete(current_row_index)
+      else
+        selected_row_indices.add(current_row_index)
+      end
+      draw
+    end
+
+    # Public: Clear all selected rows.
+    #
+    # Returns nothing.
+    def clear_selections
+      selected_row_indices.clear
+      draw
+    end
+
+    # Public: Toggle whether the table is paused.
+    # - When paused, the table stops updating and the current row is fixed.
+    # - When unpaused, the table resumes updating and the current row and
+    #   selections are reset.
+    #
+    # Returns nothing.
+    def toggle_pause
+      self.paused = !paused
+
+      unless paused
+        # Reset selections and current row on resume
+        selected_row_indices.clear
+        self.current_row_index = 0
+        self.offset = 0
+      end
+
+      draw_footer
+      draw unless paused
+    end
+
     # Internal: Set up curses, initialize colors, etc. Called by #start.
     #
     # Returns nothing.
@@ -133,12 +244,18 @@ module Hawktui
     end
 
     # Internal: Start a separate thread to handle user input (non-blocking).
+    # The input thread will call the InputHandler to execute actions based on
+    # key presses defined in the keybindings.
     #
     # Returns nothing.
     def start_input_handling
       @input_thread = Thread.new do
+        # The InputHandler must be initialized in the input thread to avoid
+        # threading issues with Curses and then assigned to the UI instance.
+        self.input_handler = Utils::InputHandler.new(keybindings: keybindings, ui: self)
+
         loop do
-          handle_input
+          @input_handler.handle_input(Curses.getch)
           sleep 0.1
           break if should_exit
         end
@@ -149,27 +266,16 @@ module Hawktui
       end
     end
 
-    # Internal: Handle a single character of user input, toggling pause or stopping
-    # the table as appropriate.
+    # Internal: Adjust the offset to keep the current row in view.
     #
     # Returns nothing.
-    def handle_input
-      case Curses.getch
-      when "p"
-        toggle_pause
-      when "q"
-        @should_exit = true
-        stop
+    def adjust_offset
+      max_display_rows = Curses.lines - 2
+      if current_row_index < offset
+        self.offset = current_row_index
+      elsif current_row_index >= offset + max_display_rows
+        self.offset = current_row_index - max_display_rows + 1
       end
-    end
-
-    # Internal: Toggle whether the table is paused. When paused, new rows
-    # are still collected but not rendered until unpaused.
-    #
-    # Returns nothing.
-    def toggle_pause
-      @paused = !paused
-      draw_footer
     end
 
     # Internal: Draw the entire table (header, rows, status line).
@@ -193,22 +299,44 @@ module Hawktui
       formatted_header_cells = header_cells.zip(layout.columns).map do |cell, column|
         column.format_cell(cell)
       end
-      draw_row(0, formatted_header_cells)
+      win.attron(Curses::A_BOLD) { draw_row(0, formatted_header_cells) }
     end
 
-    # Internal: Draw the body of the table (rows of data).
+    # Internal: Draw the body of the table, including all rows.
+    # - Highlights the current row if it is in view.
+    # - Handles scrolling if the current row is not in view.
     #
     # Returns nothing.
     def draw_body
       max_display_rows = Curses.lines - 2
-      display_rows = rows.first(max_display_rows)
+      display_rows = rows[offset, max_display_rows] || []
 
       display_rows.each_with_index do |row_data, idx|
-        cells = layout.build_cells_for_row(row_data)
-        formatted_cells = cells.zip(layout.columns).map do |cell, column|
+        row_index = offset + idx
+        cells = @layout.build_cells_for_row(row_data)
+        formatted_cells = cells.zip(@layout.columns).map do |cell, column|
           column.format_cell(cell)
         end
-        draw_row(idx + 1, formatted_cells)
+
+        # Decide highlight style:
+        style = if row_index == current_row_index && selected_row_indices.include?(row_index)
+          # Both selected + current
+          Curses::A_BOLD | Curses::A_REVERSE
+        elsif row_index == current_row_index
+          # Current row only
+          Curses::A_REVERSE
+        elsif selected_row_indices.include?(row_index)
+          # Selected only
+          Curses::A_BOLD
+        else
+          nil
+        end
+
+        if style
+          @win.attron(style) { draw_row(idx + 1, formatted_cells) }
+        else
+          draw_row(idx + 1, formatted_cells)
+        end
       end
     end
 
@@ -219,31 +347,119 @@ module Hawktui
       return unless win
 
       win.setpos(Curses.lines - 1, 0)
-      status = paused ? "PAUSED" : "RUNNING"
-      help_text = " | Press 'p' to pause/unpause, 'q' to quit"
-      win.addstr("Status: #{status}#{help_text}".ljust(Curses.cols))
+      message = current_status_message || status&.call(self) || default_status_text
+      win.addstr(message.ljust(Curses.cols)) # Pad to clear the line
       win.refresh
+    end
+
+    # Internal: Default status line text.
+    #
+    # Returns a String.
+    def default_status_text
+      help_text = "Press 'p' to pause/unpause, space to select, 'q' to quit"
+      selection_info = "#{selected_row_indices.size} rows selected"
+      status = paused ? "PAUSED" : "RUNNING"
+      "Status: #{status} | #{selection_info} | #{help_text}"
+    end
+
+    # Internal: Set the status message.
+    #
+    # message  - The String message to display.
+    def set_status_message(message, duration: 5)
+      @status_lock.synchronize do
+        @status_queue << {message: message, duration: duration}
+      end
+      process_status_queue
+    end
+
+    # Internal: Process the status message queue.
+    #
+    # Returns nothing.
+    def process_status_queue
+      return if @status_thread&.alive? # Prevent multiple threads from running.
+
+      @status_thread = Thread.new do
+        while (entry = @status_lock.synchronize {
+          begin
+            @status_queue.pop(true)
+          rescue
+            nil
+          end
+        })
+          @status_lock.synchronize do
+            self.current_status_message = entry[:message]
+            draw_footer
+          end
+
+          sleep(entry[:duration]) # Wait for the message duration.
+
+          @status_lock.synchronize do
+            self.current_status_message = nil
+            draw_footer
+          end
+        end
+      end
+    end
+
+    # Internal: Clear the status message.
+    #
+    # Returns nothing.
+    def clear_status_message
+      @status_lock.synchronize do
+        self.current_status_message = nil
+        draw_footer
+      end
     end
 
     # Internal: Draw a single row of the table, given already-formatted cells.
     #
-    # y_pos            - The Integer row position (0-based) on the screen to draw.
-    # formatted_cells  - An Array of [string_value, color], as returned by column formatting.
+    # y_pos           - The Integer row position (0-based) on the screen to draw.
+    # formatted_cells - An Array of either:
+    #                   - [string_value, color] pairs for simple cells
+    #                   - Array of [string_value, color] pairs for composite cells
     #
     # Returns nothing.
     def draw_row(y_pos, formatted_cells)
       x_pos = 0
-      formatted_cells.each do |str_value, color|
+      formatted_cells.each do |cell_data|
         win.setpos(y_pos, x_pos)
 
-        if y_pos == 0
-          # Bold the header row
-          win.attron(Curses::A_BOLD) { draw_with_color(str_value, color) }
+        if cell_data.is_a?(Array) && cell_data[0].is_a?(Array)
+          # Handle composite cell (array of [value, color] pairs)
+          cell_data.each do |str_value, color|
+            draw_cell_part(str_value, color)
+            x_pos += str_value.to_s.length
+          end
         else
-          draw_with_color(str_value, color)
+          # Handle simple cell (single [value, color] pair)
+          str_value, color = cell_data
+          draw_cell_part(str_value, color)
+          x_pos += str_value.to_s.length
         end
 
-        x_pos += str_value.length + 1
+        # Add space between columns
+        x_pos += 1
+      end
+    end
+
+    # Internal: Draw a single part of a cell with the specified color.
+    #
+    # str_value - The String text to draw.
+    # color     - An Integer color pair index or Symbol referencing a base color.
+    #
+    # Returns nothing.
+    def draw_cell_part(str_value, color)
+      return unless str_value
+
+      if color
+        color_pair = color.is_a?(Integer) ? color : Utils::Colors::BASE_COLORS[color.to_sym]&.first
+        if color_pair
+          win.attron(Curses.color_pair(color_pair + 1)) { win.addstr(str_value.to_s) }
+        else
+          win.addstr(str_value.to_s)
+        end
+      else
+        win.addstr(str_value.to_s)
       end
     end
 
